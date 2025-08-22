@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CopperQuant Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background-color: var(--secondary-color);
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        
+        .refresh-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .timestamp {
+            position: absolute;
+            bottom: 5px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .tab.active {
+            border-bottom: 2px solid var(--primary-color);
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .price-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .price-change {
+            font-size: 18px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .price-change.positive {
+            color: var(--success-color);
+        }
+        
+        .price-change.negative {
+            color: var(--accent-color);
+        }
+        
+        .signal {
+            padding: 10px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .signal.buy {
+            background-color: var(--success-color);
+        }
+        
+        .signal.sell {
+            background-color: var(--accent-color);
+        }
+        
+        .signal.hold {
+            background-color: var(--warning-color);
+        }
+        
+        .news-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .news-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .news-source {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        
+        .calendar-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--secondary-color);
+            background-color: #f9f9f9;
+        }
+        
+        .calendar-item.high {
+            border-left-color: var(--accent-color);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">CQ</div>
+                <h1>CopperQuant Dashboard</h1>
+            </div>
+            <button id="refresh-btn" class="refresh-btn">Refresh Data</button>
+        </div>
+        <div id="timestamp" class="timestamp">Last updated: {{ prediction_data.get('Date', 'N/A') }}</div>
+    </header>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" data-target="dashboard-tab">Dashboard</div>
+            <div class="tab" data-target="market-data-tab">Market Data</div>
+            <div class="tab" data-target="news-tab">News & Events</div>
+            <div class="tab" data-target="analysis-tab">Analysis</div>
+            <div class="tab" data-target="model-tab">Model Playground</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <div class="dashboard-grid">
+                <!-- Current Copper Price Card -->
+                <div class="card">
+                    <h2>Current Copper Price</h2>
+                    <div class="price-value">${{ copper_price.get('price', 'N/A') }}</div>
+                    {% if copper_price.get('change', 0) > 0 %}
+                        <div class="price-change positive">+{{ copper_price.get('change', 0) }}% ▲</div>
+                    {% else %}
+                        <div class="price-change negative">{{ copper_price.get('change', 0) }}% ▼</div>
+                    {% endif %}
+                </div>
+
+                <!-- Current Prediction Card -->
+                <div class="card">
+                    <h2>Price Prediction</h2>
+                    <div>
+                        <p>Current Price: {{ prediction_data.get('Current Price', 'N/A') }}</p>
+                        <p>Predicted Change: {{ prediction_data.get('Predicted Change', 'N/A') }}</p>
+                        <p>Predicted Price: {{ prediction_data.get('Predicted Price', 'N/A') }}</p>
+                        {% set signal = prediction_data.get('Trading Signal', '').strip() %}
+                        <div class="signal {{ signal.lower() if signal else 'hold' }}">
+                            {{ signal if signal else 'HOLD' }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Chart Card -->
+                <div class="card">
+                    <h2>Copper Price History</h2>
+                    <div class="chart-container">
+                        <canvas id="price-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Latest News Card -->
+                <div class="card">
+                    <h2>Latest News</h2>
+                    <div class="news-list">
+                        {% for news in top_news %}
+                        <div class="news-item">
+                            <div class="news-title">{{ news.title }}</div>
+                            <div class="news-source">{{ news.source }} - {{ news.published_at }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Economic Calendar Card -->
+                <div class="card">
+                    <h2>Economic Calendar</h2>
+                    <div class="calendar-list">
+                        {% for event in economic_calendar[:5] %}
+                        <div class="calendar-item {{ event.importance.lower() if event.importance else '' }}">
+                            <div>{{ event.date }} {{ event.time }} - {{ event.country }} {{ event.event }}</div>
+                            <div>Importance: {{ event.importance }} | Previous: {{ event.previous }} | Forecast: {{ event.forecast }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Data Tab -->
+        <div id="market-data-tab" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Advanced Price Charts</h2>
+                    <div class="chart-container">
+                        <img src="/results/copper_price_history.png" alt="Copper Price Chart" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Related Assets</h2>
+                    <div class="related-assets">
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th>Price</th>
+                                    <th>Change</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name, data in related_assets.items() %}
+                                <tr>
+                                    <td>{{ name }}</td>
+                                    <td>${{ data.get('price', 'N/A') }}</td>
+                                    <td style="{% if data.get('change', 0) > 0 %}color: var(--success-color);{% else %}color: var(--accent-color);{% endif %}">
+                                        {{ data.get('change', 0) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- News Tab -->
+        <div id="news-tab" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Market News</h2>
+                    <div class="news-list">
+                        {% for news in top_news %}
+                        <div class="news-item">
+                            <div class="news-title">{{ news.title }}</div>
+                            <div>{{ news.summary }}</div>
+                            <div class="news-source">{{ news.source }} - {{ news.published_at }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Sentiment Analysis</h2>
+                    <div>
+                        <p>Overall Sentiment: {{ news_sentiment.get('overall_sentiment', 'Neutral') }}</p>
+                        <p>Sentiment Score: {{ news_sentiment.get('sentiment_score', 0) }}</p>
+                        <p>Positive News: {{ news_sentiment.get('news_count', {}).get('positive', 0) }}</p>
+                        <p>Neutral News: {{ news_sentiment.get('news_count', {}).get('neutral', 0) }}</p>
+                        <p>Negative News: {{ news_sentiment.get('news_count', {}).get('negative', 0) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div id="analysis-tab" class="tab-content">
+            <div class="card">
+                <h2>Trading Signals</h2>
+                <div class="chart-container">
+                    <img src="/results/trendfollowing_3_signals.png" alt="Trading Signals" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Strategy Returns</h2>
+                    <div class="chart-container">
+                        <img src="/results/trendfollowing_3_returns.png" alt="Strategy Returns" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Strategy Drawdowns</h2>
+                    <div class="chart-container">
+                        <img src="/results/trendfollowing_3_drawdowns.png" alt="Strategy Drawdowns" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Tab -->
+        <div id="model-tab" class="tab-content">
+            <div class="card">
+                <h2>Model Information</h2>
+                <div>
+                    <p><strong>Primary Model:</strong> Lasso Regression - A linear model with L1 regularization that helps select important features</p>
+                    <p><strong>Alternative Models:</strong> Random Forest, Gradient Boosting</p>
+                    <p><strong>Training Data:</strong> Monthly copper prices from 2010-2025 with 48 engineered features</p>
+                    <p><strong>Evaluation Metric:</strong> RMSE (Root Mean Square Error) of 0.0621</p>
+                    <p><strong>Feature Engineering:</strong> Technical indicators (MA, RSI, MACD) and macroeconomic variables</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Feature Importance</h2>
+                <div class="chart-container">
+                    <img src="/results/top_features_prediction.png" alt="Feature Importance" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>CopperQuant Trading Signal Generator &copy; 2025 | Last updated: {{ prediction_data.get('Date', 'N/A') }}</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize tabs
+            initTabs();
+            
+            // Initialize refresh button
+            initRefreshButton();
+            
+            // Initialize price chart
+            initPriceChart();
+        });
+
+        // Tab functionality
+        function initTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            if (tabs.length > 0) {
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', function() {
+                        // Remove active class from all tabs
+                        tabs.forEach(t => t.classList.remove('active'));
+                        // Add active class to clicked tab
+                        this.classList.add('active');
+                        
+                        // Hide all tab content
+                        const tabContents = document.querySelectorAll('.tab-content');
+                        tabContents.forEach(content => content.classList.remove('active'));
+                        
+                        // Show the corresponding tab content
+                        const targetId = this.getAttribute('data-target');
+                        document.getElementById(targetId).classList.add('active');
+                    });
+                });
+            }
+        }
+
+        // Refresh button functionality
+        function initRefreshButton() {
+            const refreshBtn = document.getElementById('refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    // Show loading state
+                    this.textContent = 'Refreshing...';
+                    this.disabled = true;
+                    
+                    // Reload the page
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                });
+            }
+        }
+
+        // Initialize price chart
+        function initPriceChart() {
+            fetch('/api/price-history')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('price-chart');
+                    if (!ctx) return;
+                    
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Copper Price',
+                                data: data.prices,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                tension: 0.1,
+                                pointRadius: 0,
+                                pointHoverRadius: 5
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        maxTicksLimit: 10
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error loading price data:', error));
+        }
+    </script>
+</body>
+</html>

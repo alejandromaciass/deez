@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CopperQuant Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --update-flash-color: rgba(52, 152, 219, 0.7);
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo h1 {
+            margin: 0;
+        }
+        
+        /* Real-time update styles */
+        .flash-update {
+            animation: flash-animation 1s ease;
+        }
+        
+        @keyframes flash-animation {
+            0% { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+            50% { box-shadow: 0 0 20px var(--update-flash-color); }
+            100% { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+        }
+        
+        .connection-status-container {
+            display: flex;
+            align-items: center;
+            margin-left: 20px;
+            color: white;
+            font-size: 0.9em;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 5px var(--success-color);
+        }
+        
+        .disconnected {
+            background-color: var(--accent-color);
+        }
+        
+        .real-time-badge {
+            background-color: var(--success-color);
+            color: white;
+            font-size: 0.8em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            display: inline-block;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .real-time-badge.active {
+            opacity: 1;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
+            70% { box-shadow: 0 0 0 5px rgba(46, 204, 113, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+        
+        .update-timestamp {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+            text-align: right;
+        }
+        
+        /* Card styles with real-time updates */
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(to right, var(--secondary-color), var(--success-color));
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .card.updating::before {
+            transform: translateX(0);
+        }
+        
+        /* Trading signal styles */
+        .signal-buy {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+        
+        .signal-sell {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+        
+        .signal-hold {
+            color: var(--warning-color);
+            font-weight: bold;
+        }
+        
+        /* Price change styles */
+        .price-change {
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        
+        .price-change.positive {
+            color: var(--success-color);
+        }
+        
+        .price-change.negative {
+            color: var(--accent-color);
+        }
+        
+        /* Chart container with real-time updates */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+        
+        .chart-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            color: #666;
+            z-index: 1;
+        }
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background-color: var(--secondary-color);
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        
+        .current-copper-price {
+            display: flex;
+            align-items: center;
+            color: white;
+            margin-left: 20px;
+            font-size: 1.1em;
+        }
+        
+        .current-copper-price .label {
+            margin-right: 5px;
+            opacity: 0.8;
+        }
+        
+        .current-copper-price #header-price {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .current-copper-price #header-change {
+            font-size: 0.9em;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .current-copper-price #header-change.positive {
+            background-color: rgba(46, 204, 113, 0.3);
+        }
+        
+        .current-copper-price #header-change.negative {
+            background-color: rgba(231, 76, 60, 0.3);
+        }
+        
+        .refresh-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .timestamp {
+            position: absolute;
+            bottom: 5px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+            background-color: #f9f9f9;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            background-color: #f9f9f9;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            user-select: none;
+            position: relative;
+            z-index: 10;
+            min-width: 120px;
+            text-align: center;
+            border: none;
+            outline: none;
+        }
+        
+        .tab:hover {
+            background-color: #e9e9e9;
+            color: #333;
+            border-bottom-color: #ccc;
+        }
+        
+        .tab.active {
+            border-bottom: 3px solid var(--primary-color);
+            background-color: white;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none !important;
+            width: 100%;
+            min-height: 400px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tab-content.active {
+            display: block !important;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .price-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .price-change {
+            font-size: 18px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .price-change.positive {
+            color: var(--success-color);
+        }
+        
+        .price-change.negative {
+            color: var(--accent-color);
+        }
+        
+        .signal {
+            padding: 10px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .signal.buy {
+            background-color: var(--success-color);
+        }
+        
+        .signal.sell {
+            background-color: var(--accent-color);
+        }
+        
+        .signal.hold {
+            background-color: var(--warning-color);
+        }
+        
+        .news-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .news-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .news-source {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        
+        .calendar-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--secondary-color);
+            background-color: #f9f9f9;
+        }
+        
+        .calendar-item.high {
+            border-left-color: var(--accent-color);
+        }
+        
+        /* Performance comparison styles */
+        .period-selector {
+            margin-bottom: 15px;
+            text-align: right;
+        }
+        
+        .period-selector select {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .performance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .performance-table th, 
+        .performance-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .performance-table th {
+            background-color: #f9f9f9;
+            font-weight: bold;
+        }
+        
+        .performance-table td.positive {
+            color: var(--success-color);
+        }
+        
+        .performance-table td.negative {
+            color: var(--accent-color);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">CQ</div>
+                <h1>CopperQuant Dashboard</h1>
+            </div>
+            <div class="current-copper-price">
+                <span class="label">Copper:</span>
+                <span id="header-price">${{ copper_price.get('price', '5.78') }}</span>
+                <span id="header-change" class="{% if copper_price.get('change', 0) > 0 %}positive{% elif copper_price.get('change', 0) < 0 %}negative{% endif %}">
+                    {% if copper_price.get('change', 0) > 0 %}+{% endif %}{{ copper_price.get('change', '0.00') }}%
+                </span>
+            </div>
+            <button id="refresh-btn" class="refresh-btn">Refresh Data</button>
+        </div>
+        <div id="timestamp" class="timestamp">Last updated: {{ prediction_data.get('Date', 'N/A') }}</div>
+    </header>
+
+    <div class="container">
+        <!-- Debug Panel (remove after fixing) -->
+        <div style="background: #ffffcc; padding: 10px; margin-bottom: 20px; border: 1px solid #ffcc00; border-radius: 5px;">
+            <strong>🔧 Debug Panel:</strong>
+            <button onclick="testTabClick(0)" style="margin: 0 5px; padding: 5px 10px;">Test Tab 1</button>
+            <button onclick="testTabClick(1)" style="margin: 0 5px; padding: 5px 10px;">Test Tab 2</button>
+            <button onclick="testTabClick(2)" style="margin: 0 5px; padding: 5px 10px;">Test Tab 3</button>
+            <button onclick="checkTabState()" style="margin: 0 5px; padding: 5px 10px;">Check State</button>
+            <button onclick="console.log('Tabs:', document.querySelectorAll('.tab')); console.log('Contents:', document.querySelectorAll('.tab-content'));" style="margin: 0 5px; padding: 5px 10px;">Log Elements</button>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-target="dashboard-tab">Dashboard</div>
+            <div class="tab" data-target="market-data-tab">Market Data</div>
+            <div class="tab" data-target="performance-tab">Performance</div>
+            <div class="tab" data-target="news-tab">News & Events</div>
+            <div class="tab" data-target="analysis-tab">Analysis</div>
+            <div class="tab" data-target="scenario-tab">Scenario Analysis</div>
+            <div class="tab" data-target="model-tab">Model Playground</div>
+            <div class="tab" data-target="backtest-tab">Backtesting</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <div class="dashboard-grid">
+                <!-- Current Copper Price Card -->
+                <div id="market-data-card" class="card">
+                    <div class="card-header">
+                        <h2>{{ copper_price.get('symbol', 'COMEX: HGW00') }} Price</h2>
+                        <span class="real-time-badge">Real-time</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="price-info">
+                            <div class="price-value" id="current-price">${{ copper_price.get('price', 'N/A') }}</div>
+                            {% set change = copper_price.get('change', 0) %}
+                            {% set change_percent = copper_price.get('change_percent', copper_price.get('change', 0)) %}
+                            <div id="price-change" class="price-change {% if change_percent|float > 0 %}positive{% elif change_percent|float < 0 %}negative{% endif %}">
+                                <span class="change-amount">{% if change|float > 0 %}+{% endif %}${{ "%.2f"|format(change|float) }}</span>
+                                <span class="change-percent">({% if change_percent|float > 0 %}+{% endif %}{{ "%.2f"|format(change_percent|float) }}%)</span>
+                                {% if change_percent|float > 0 %}▲{% else %}▼{% endif %}
+                            </div>
+                            <div class="price-details">
+                                <div class="detail">
+                                    <span class="label">High:</span>
+                                    <span id="price-high" class="value">${{ copper_price.get('high', 'N/A') }}</span>
+                                </div>
+                                <div class="detail">
+                                    <span class="label">Low:</span>
+                                    <span id="price-low" class="value">${{ copper_price.get('low', 'N/A') }}</span>
+                                </div>
+                                <div class="detail">
+                                    <span class="label">Volume:</span>
+                                    <span id="price-volume" class="value">{{ copper_price.get('volume', 'N/A') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="update-timestamp">
+                            Last updated: <span id="price-timestamp">{{ copper_price.get('timestamp', 'N/A') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Prediction Card -->
+                <div id="prediction-card" class="card">
+                    <div class="card-header">
+                        <h2>Price Prediction</h2>
+                        <span class="real-time-badge">Real-time</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="prediction-info">
+                            <div class="prediction-details">
+                                <div class="detail">
+                                    <span class="label">Predicted Change:</span>
+                                    <span id="predicted-change" class="value {% if prediction_data.get('Predicted Change', '+0.52%').startswith('+') %}positive{% elif prediction_data.get('Predicted Change', '+0.52%').startswith('-') %}negative{% endif %}">
+                                        {{ prediction_data.get('Predicted Change', '+0.52%') }}
+                                    </span>
+                                </div>
+                                <div class="detail">
+                                    <span class="label">Predicted Price:</span>
+                                    <span id="predicted-price" class="value">{{ prediction_data.get('Predicted Price', '$5.77') }}</span>
+                                </div>
+                                <div class="detail">
+                                    <span class="label">Trading Signal:</span>
+                                    <span id="trading-signal" class="value signal-{{ prediction_data.get('Trading Signal', 'HOLD')|lower }}">
+                                        {{ prediction_data.get('Trading Signal', 'HOLD') }}
+                                    </span>
+                                </div>
+                                <div class="detail">
+                                    <span class="label">Confidence:</span>
+                                    <span id="prediction-confidence" class="value">{{ prediction_data.get('Confidence', '65.0%') }}</span>
+                                </div>
+                            </div>
+                            <div class="factors">
+                                <span class="label">Top Factors:</span>
+                                <span id="top-factors" class="value">{{ prediction_data.get('Top Factors', 'Trade_Weighted_Dollar, Industrial_Production, US_China_Exchange_Rate') }}</span>
+                            </div>
+                        </div>
+                        <div class="update-timestamp">
+                            Prediction Date: <span id="prediction-date">{{ prediction_data.get('Date', '2025-07-23') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Chart Card -->
+                <div class="card">
+                    <h2>Copper Price History</h2>
+                    <div class="chart-container">
+                        <canvas id="price-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Latest News Card -->
+                <div class="card">
+                    <h2>Latest News</h2>
+                    <div class="news-list">
+                        {% for news in top_news %}
+                        <div class="news-item">
+                            <div class="news-title">{{ news.title }}</div>
+                            <div class="news-source">{{ news.source }} - {{ news.published_at }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Economic Calendar Card -->
+                <div class="card">
+                    <h2>Economic Calendar</h2>
+                    <div class="calendar-list">
+                        {% for event in economic_calendar[:5] %}
+                        <div class="calendar-item {{ event.importance.lower() if event.importance else '' }}">
+                            <div>{{ event.date }} {{ event.time }} - {{ event.country }} {{ event.event }}</div>
+                            <div>Importance: {{ event.importance }} | Previous: {{ event.previous }} | Forecast: {{ event.forecast }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Data Tab -->
+        <div id="market-data-tab" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Advanced Price Charts</h2>
+                    <div class="chart-container">
+                        <img src="/results/copper_price_history.png" alt="Copper Price Chart" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Related Assets</h2>
+                    <div class="related-assets">
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th>Price</th>
+                                    <th>Change</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name, data in related_assets.items() %}
+                                <tr>
+                                    <td>{{ name }}</td>
+                                    <td>${{ data.get('price', 'N/A') }}</td>
+                                    {% set asset_change = data.get('change', 0) %}
+                                    <td style="{% if asset_change|float > 0 %}color: var(--success-color);{% else %}color: var(--accent-color);{% endif %}">
+                                        {{ asset_change }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Tab -->
+        <div id="performance-tab" class="tab-content">
+            <div class="card">
+                <h2>Performance Comparison</h2>
+                <div class="period-selector">
+                    <label for="performance-period">Time Period:</label>
+                    <select id="performance-period">
+                        <option value="7">7 Days</option>
+                        <option value="30" selected>30 Days</option>
+                        <option value="90">90 Days</option>
+                    </select>
+                </div>
+                <div class="chart-container">
+                    <canvas id="performance-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Returns Comparison</h2>
+                    <div class="table-container">
+                        <table class="performance-table" id="returns-table">
+                            <thead>
+                                <tr>
+                                    <th>Index/Model</th>
+                                    <th>Return (%)</th>
+                                    <th>vs. CopperQuant</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Risk Metrics</h2>
+                    <div class="table-container">
+                        <table class="performance-table" id="risk-table">
+                            <thead>
+                                <tr>
+                                    <th>Index/Model</th>
+                                    <th>Volatility (%)</th>
+                                    <th>Sharpe Ratio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- News Tab -->
+        <div id="news-tab" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Market News</h2>
+                    <div class="news-list">
+                        {% for news in top_news %}
+                        <div class="news-item">
+                            <div class="news-title">{{ news.title }}</div>
+                            <div>{{ news.summary }}</div>
+                            <div class="news-source">{{ news.source }} - {{ news.published_at }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Sentiment Analysis</h2>
+                    <div>
+                        <p>Overall Sentiment: {{ news_sentiment.get('overall_sentiment', 'Neutral') }}</p>
+                        <p>Sentiment Score: {{ news_sentiment.get('sentiment_score', 0) }}</p>
+                        <p>Positive News: {{ news_sentiment.get('news_count', {}).get('positive', 0) }}</p>
+                        <p>Neutral News: {{ news_sentiment.get('news_count', {}).get('neutral', 0) }}</p>
+                        <p>Negative News: {{ news_sentiment.get('news_count', {}).get('negative', 0) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div id="analysis-tab" class="tab-content">
+            <div class="card">
+                <h2>Trading Signals</h2>
+                <div class="chart-container">
+                    <img src="/results/trendfollowing_3_signals.png" alt="Trading Signals" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Strategy Returns</h2>
+                    <div class="chart-container">
+                        <img src="/results/trendfollowing_3_returns.png" alt="Strategy Returns" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Strategy Drawdowns</h2>
+                    <div class="chart-container">
+                        <img src="/results/trendfollowing_3_drawdowns.png" alt="Strategy Drawdowns" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenario Tab -->
+        <div id="scenario-tab" class="tab-content">
+            <div class="card">
+                <h2>Scenario Analysis</h2>
+                <p>Run different market scenarios to see how copper prices might react.</p>
+                <div id="scenario-form-container">
+                    <form id="scenario-form">
+                        <div>
+                            <label for="scenario-template">Scenario Template:</label>
+                            <select id="scenario-template">
+                                <option value="base">Base Case</option>
+                                <option value="bullish">Bullish Case</option>
+                                <option value="bearish">Bearish Case</option>
+                                <option value="inflation">High Inflation</option>
+                                <option value="recession">Recession</option>
+                            </select>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button type="submit" class="refresh-btn">Run Scenario</button>
+                        </div>
+                    </form>
+                </div>
+                <div id="scenario-results" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+
+        <!-- Model Playground Tab -->
+        <div id="model-tab" class="tab-content">
+            <div class="card">
+                <h2>Model Information</h2>
+                <div>
+                    <p><strong>Primary Model:</strong> Lasso Regression - A linear model with L1 regularization that helps select important features</p>
+                    <p><strong>Alternative Models:</strong> Random Forest, Gradient Boosting</p>
+                    <p><strong>Training Data:</strong> Monthly copper prices from 2010-2025 with 48 engineered features</p>
+                    <p><strong>Evaluation Metric:</strong> RMSE (Root Mean Square Error) of 0.0621</p>
+                    <p><strong>Feature Engineering:</strong> Technical indicators (MA, RSI, MACD) and macroeconomic variables</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Feature Importance</h2>
+                <div class="chart-container">
+                    <img src="/results/top_features_prediction.png" alt="Feature Importance" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Backtesting Tab -->
+        <div id="backtest-tab" class="tab-content">
+            <div class="card">
+                <h2>Enhanced Backtesting</h2>
+                <p>Test trading strategies with transaction costs and slippage.</p>
+                <div id="backtest-form-container">
+                    <form id="backtest-form">
+                        <div>
+                            <label for="strategy-type">Strategy Type:</label>
+                            <select id="strategy-type">
+                                <option value="threshold">Threshold Strategy</option>
+                                <option value="moving_average">Moving Average Strategy</option>
+                                <option value="trend_following">Trend Following Strategy</option>
+                            </select>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button type="submit" class="refresh-btn">Run Backtest</button>
+                        </div>
+                    </form>
+                </div>
+                <div id="backtest-results" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>CopperQuant Trading Signal Generator &copy; 2025 | Last updated: {{ prediction_data.get('Date', 'N/A') }}</p>
+    </footer>
+
+    <script>
+        // Global variables
+        let socket;
+        let priceChart;
+        let lastMarketData = null;
+        let lastPrediction = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("🚀 DOM Content Loaded - Starting initialization...");
+            
+            // Initialize tabs with multiple attempts
+            let initAttempts = 0;
+            const maxAttempts = 5;
+            
+            function attemptTabInit() {
+                initAttempts++;
+                console.log(`Tab initialization attempt ${initAttempts}/${maxAttempts}`);
+                
+                const tabs = document.querySelectorAll('.tab');
+                const tabContents = document.querySelectorAll('.tab-content');
+                
+                if (tabs.length > 0 && tabContents.length > 0) {
+                    console.log("✅ Elements found, initializing tabs...");
+                    initTabs();
+                    return true;
+                } else {
+                    console.log(`❌ Elements not ready yet. Tabs: ${tabs.length}, Contents: ${tabContents.length}`);
+                    if (initAttempts < maxAttempts) {
+                        setTimeout(attemptTabInit, 200);
+                    } else {
+                        console.error("❌ Failed to initialize tabs after maximum attempts");
+                    }
+                    return false;
+                }
+            }
+            
+            // Start initialization
+            attemptTabInit();
+            
+            // Initialize other components with delay
+            setTimeout(function() {
+                // Initialize refresh button
+                initRefreshButton();
+                
+                // Initialize price chart
+                initPriceChart();
+                
+                // Initialize Socket.IO connection
+                initSocketConnection();
+                
+                // Add real-time indicator
+                addRealTimeIndicator();
+            }, 300);
+        });
+        
+        // Initialize Socket.IO connection
+        function initSocketConnection() {
+            // Connect to Socket.IO server
+            socket = io();
+            
+            // Connection events
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                updateConnectionStatus(false);
+            });
+            
+            // Data events
+            socket.on('initial_data', function(data) {
+                console.log('Received initial data:', data);
+                updateMarketData(data.market_data);
+                updatePrediction(data.prediction);
+            });
+            
+            socket.on('market_update', function(data) {
+                console.log('Received market update:', data);
+                updateMarketData(data.market_data);
+                if (data.prediction) {
+                    updatePrediction(data.prediction);
+                }
+                
+                // Update chart if available
+                if (priceChart && data.market_data) {
+                    updatePriceChart(data.market_data);
+                }
+            });
+        }
+        
+        // Update connection status indicator
+        function updateConnectionStatus(connected) {
+            const statusIndicator = document.getElementById('connection-status');
+            if (statusIndicator) {
+                if (connected) {
+                    statusIndicator.classList.remove('disconnected');
+                    statusIndicator.classList.add('connected');
+                    statusIndicator.title = 'Connected - Real-time updates active';
+                    
+                    // Show real-time badges
+                    const badges = document.querySelectorAll('.real-time-badge');
+                    badges.forEach(badge => {
+                        badge.classList.add('active');
+                    });
+                } else {
+                    statusIndicator.classList.remove('connected');
+                    statusIndicator.classList.add('disconnected');
+                    statusIndicator.title = 'Disconnected - Real-time updates inactive';
+                    
+                    // Hide real-time badges
+                    const badges = document.querySelectorAll('.real-time-badge');
+                    badges.forEach(badge => {
+                        badge.classList.remove('active');
+                    });
+                }
+            }
+        }
+        
+        // Add real-time indicator to header
+        function addRealTimeIndicator() {
+            const headerContent = document.querySelector('.header-content');
+            if (headerContent) {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'connection-status-container';
+                statusDiv.innerHTML = `
+                    <span>Real-time:</span>
+                    <div id="connection-status" class="status-indicator disconnected" title="Connecting..."></div>
+                `;
+                headerContent.appendChild(statusDiv);
+                
+                // Add CSS for the indicator
+                const style = document.createElement('style');
+                style.textContent = `
+                    .connection-status-container {
+                        display: flex;
+                        align-items: center;
+                        margin-left: 20px;
+                        color: white;
+                    }
+                    .status-indicator {
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 50%;
+                        margin-left: 5px;
+                    }
+                    .connected {
+                        background-color: #2ecc71;
+                        box-shadow: 0 0 5px #2ecc71;
+                    }
+                    .disconnected {
+                        background-color: #e74c3c;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        
+        // Update market data display
+        function updateMarketData(data) {
+            if (!data) return;
+            
+            lastMarketData = data;
+            
+            // Update price display
+            const priceElement = document.getElementById('current-price');
+            if (priceElement) {
+                priceElement.textContent = `$${data.price.toFixed(2)}`;
+            }
+            
+            // Update header price display
+            const headerPriceElement = document.getElementById('header-price');
+            if (headerPriceElement) {
+                headerPriceElement.textContent = `$${data.price.toFixed(2)}`;
+            }
+            
+            // Update change display - handle both change and change_percent
+            const changeElement = document.getElementById('price-change');
+            if (changeElement) {
+                const change = data.change || 0;
+                const changePercent = data.change_percent || data.change || 0;
+                
+                // Format the change display
+                const changeAmountText = change >= 0 ? `+$${change.toFixed(2)}` : `$${change.toFixed(2)}`;
+                const changePercentText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+                const arrow = changePercent >= 0 ? '▲' : '▼';
+                
+                changeElement.innerHTML = `<span class="change-amount">${changeAmountText}</span> <span class="change-percent">(${changePercentText})</span> ${arrow}`;
+                
+                // Update color based on change direction
+                if (changePercent > 0) {
+                    changeElement.classList.remove('negative');
+                    changeElement.classList.add('positive');
+                } else if (changePercent < 0) {
+                    changeElement.classList.remove('positive');
+                    changeElement.classList.add('negative');
+                } else {
+                    changeElement.classList.remove('positive', 'negative');
+                }
+            }
+            
+            // Update header change display
+            const headerChangeElement = document.getElementById('header-change');
+            if (headerChangeElement) {
+                const changePercent = data.change_percent || data.change || 0;
+                const changeText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+                headerChangeElement.textContent = changeText;
+                
+                // Update color based on change direction
+                if (changePercent > 0) {
+                    headerChangeElement.classList.remove('negative');
+                    headerChangeElement.classList.add('positive');
+                } else if (changePercent < 0) {
+                    headerChangeElement.classList.remove('positive');
+                    headerChangeElement.classList.add('negative');
+                } else {
+                    headerChangeElement.classList.remove('positive', 'negative');
+                }
+            }
+            
+            // Update high/low display
+            const highElement = document.getElementById('price-high');
+            if (highElement) {
+                highElement.textContent = `$${data.high.toFixed(2)}`;
+            }
+            
+            const lowElement = document.getElementById('price-low');
+            if (lowElement) {
+                lowElement.textContent = `$${data.low.toFixed(2)}`;
+            }
+            
+            // Update volume display
+            const volumeElement = document.getElementById('price-volume');
+            if (volumeElement) {
+                volumeElement.textContent = data.volume.toLocaleString();
+            }
+            
+            // Update timestamp
+            const timestampElement = document.getElementById('price-timestamp');
+            if (timestampElement) {
+                timestampElement.textContent = data.timestamp;
+            }
+            
+            // Flash effect to indicate update
+            flashUpdate('market-data-card');
+        }
+        
+        // Update prediction display
+        function updatePrediction(data) {
+            if (!data) return;
+            
+            lastPrediction = data;
+            
+            // Update prediction display
+            const predictionElements = {
+                'predicted-change': data.predicted_change,
+                'predicted-price': data.predicted_price,
+                'trading-signal': data.trading_signal,
+                'prediction-confidence': data.confidence ? `${data.confidence}%` : '65%',
+                'top-factors': data.top_factors,
+                'prediction-date': data.date
+            };
+            
+            for (const [id, value] of Object.entries(predictionElements)) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            }
+            
+            // Update signal color
+            const signalElement = document.getElementById('trading-signal');
+            if (signalElement) {
+                signalElement.className = ''; // Reset classes
+                if (data.trading_signal === 'BUY') {
+                    signalElement.classList.add('signal-buy');
+                } else if (data.trading_signal === 'SELL') {
+                    signalElement.classList.add('signal-sell');
+                } else {
+                    signalElement.classList.add('signal-hold');
+                }
+            }
+            
+            // Flash effect to indicate update
+            flashUpdate('prediction-card');
+        }
+        
+        // Flash effect for updates
+        function flashUpdate(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.classList.add('flash-update');
+                setTimeout(() => {
+                    element.classList.remove('flash-update');
+                }, 1000);
+            }
+        }
+        
+        // Update price chart with new data point
+        function updatePriceChart(data) {
+            if (!priceChart || !data || !data.price) return;
+            
+            // Add new data point
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString();
+            
+            priceChart.data.labels.push(timeLabel);
+            priceChart.data.datasets[0].data.push(data.price);
+            
+            // Keep only the last 50 data points
+            if (priceChart.data.labels.length > 50) {
+                priceChart.data.labels.shift();
+                priceChart.data.datasets[0].data.shift();
+            }
+            
+            priceChart.update();
+        }
+
+        // Tab functionality with enhanced debugging
+        function initTabs() {
+            console.log("=== INITIALIZING TABS ===");
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            console.log(`Found ${tabs.length} tabs and ${tabContents.length} tab content sections`);
+            
+            // Log all tabs found
+            tabs.forEach((tab, index) => {
+                console.log(`Tab ${index}: "${tab.textContent.trim()}" -> target: "${tab.getAttribute('data-target')}"`);
+            });
+            
+            // Log all tab contents found
+            tabContents.forEach((content, index) => {
+                console.log(`Content ${index}: ID="${content.id}" classes="${content.className}"`);
+            });
+            
+            if (tabs.length === 0) {
+                console.error("❌ NO TABS FOUND! Check HTML structure.");
+                return;
+            }
+            
+            // Clear any existing event listeners by cloning nodes
+            tabs.forEach((tab, index) => {
+                const newTab = tab.cloneNode(true);
+                tab.parentNode.replaceChild(newTab, tab);
+                console.log(`Cloned tab ${index}: ${newTab.textContent.trim()}`);
+            });
+            
+            // Get the updated tabs after cloning
+            const updatedTabs = document.querySelectorAll('.tab');
+            console.log(`After cloning, found ${updatedTabs.length} tabs`);
+            
+            // Add click event listeners
+            updatedTabs.forEach((tab, index) => {
+                console.log(`Adding click listener to tab ${index}: "${tab.textContent.trim()}"`);
+                
+                tab.addEventListener('click', function(e) {
+                    console.log(`\n=== TAB CLICKED ===`);
+                    console.log(`Clicked tab: "${this.textContent.trim()}"`);
+                    console.log(`Target: "${this.getAttribute('data-target')}"`);
+                    console.log(`Event:`, e);
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const targetId = this.getAttribute('data-target');
+                    
+                    if (!targetId) {
+                        console.error(`❌ No data-target attribute found on tab: "${this.textContent.trim()}"`);
+                        return;
+                    }
+                    
+                    // Remove active class from all tabs
+                    updatedTabs.forEach((t, i) => {
+                        const wasActive = t.classList.contains('active');
+                        t.classList.remove('active');
+                        if (wasActive) console.log(`Removed active from tab ${i}: "${t.textContent.trim()}"`);
+                    });
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    console.log(`✅ Added active class to: "${this.textContent.trim()}"`);
+                    
+                    // Hide all tab content
+                    tabContents.forEach((content, i) => {
+                        const wasVisible = content.classList.contains('active');
+                        content.classList.remove('active');
+                        content.style.display = 'none';
+                        if (wasVisible) console.log(`Hidden content ${i}: ${content.id}`);
+                    });
+                    
+                    // Show the corresponding tab content
+                    const targetElement = document.getElementById(targetId);
+                    if (targetElement) {
+                        targetElement.classList.add('active');
+                        targetElement.style.display = 'block';
+                        console.log(`✅ Activated content: ${targetId}`);
+                        
+                        // Trigger any charts or data loading for the active tab
+                        if (targetId === 'performance-tab') {
+                            console.log("Loading performance data...");
+                            setTimeout(loadPerformanceData, 100);
+                        }
+                    } else {
+                        console.error(`❌ Target element not found: ${targetId}`);
+                        console.log("Available elements with IDs:");
+                        document.querySelectorAll('[id]').forEach(el => {
+                            console.log(`  - ${el.id} (${el.tagName})`);
+                        });
+                    }
+                    
+                    console.log("=== TAB CLICK COMPLETE ===\n");
+                });
+                
+                // Test if the event listener was added
+                console.log(`✅ Event listener added to tab ${index}`);
+            });
+            
+            // Ensure the first tab is active by default
+            if (updatedTabs.length > 0) {
+                const firstTab = updatedTabs[0];
+                const firstTabTarget = firstTab.getAttribute('data-target');
+                const firstTabContent = document.getElementById(firstTabTarget);
+                
+                console.log(`Setting default active tab: "${firstTab.textContent.trim()}" -> ${firstTabTarget}`);
+                
+                // Clear all active states first
+                updatedTabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => {
+                    c.classList.remove('active');
+                    c.style.display = 'none';
+                });
+                
+                // Set first tab as active
+                firstTab.classList.add('active');
+                if (firstTabContent) {
+                    firstTabContent.classList.add('active');
+                    firstTabContent.style.display = 'block';
+                    console.log(`✅ Default tab set: ${firstTabTarget}`);
+                } else {
+                    console.error(`❌ First tab content not found: ${firstTabTarget}`);
+                }
+            }
+            
+            console.log("=== TAB INITIALIZATION COMPLETE ===");
+            
+            // Add a test function to window for manual testing
+            window.testTabClick = function(tabIndex) {
+                console.log(`Manual test: clicking tab ${tabIndex}`);
+                if (updatedTabs[tabIndex]) {
+                    updatedTabs[tabIndex].click();
+                } else {
+                    console.error(`Tab ${tabIndex} not found`);
+                }
+            };
+            
+            console.log("💡 You can test tabs manually with: testTabClick(0), testTabClick(1), etc.");
+        }
+
+        // Refresh button functionality
+        function initRefreshButton() {
+            const refreshBtn = document.getElementById('refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    // Show loading state
+                    this.textContent = 'Refreshing...';
+                    this.disabled = true;
+                    
+                    // Request update from server
+                    if (socket && socket.connected) {
+                        socket.emit('request_update');
+                        
+                        // Reset button after a short delay
+                        setTimeout(() => {
+                            this.textContent = 'Refresh';
+                            this.disabled = false;
+                        }, 1000);
+                    } else {
+                        // If socket not available, reload the page
+                        setTimeout(() => {
+                            location.reload();
+                        }, 500);
+                    }
+                });
+            }
+        }
+
+        // Initialize price chart
+        function initPriceChart() {
+            fetch('/api/price-history')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('price-chart');
+                    if (!ctx) return;
+                    
+                    priceChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Copper Price',
+                                data: data.prices,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                tension: 0.1,
+                                pointRadius: 0,
+                                pointHoverRadius: 5
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        maxTicksLimit: 10
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error loading price data:', error));
+                
+            // Initialize performance chart
+            initPerformanceChart(30); // Default to 30 days
+            
+            // Add event listener for period selector
+            const periodSelector = document.getElementById('performance-period');
+            if (periodSelector) {
+                periodSelector.addEventListener('change', function() {
+                    const days = parseInt(this.value);
+                    initPerformanceChart(days);
+                });
+            }
+        }
+        
+        // Initialize performance comparison chart
+        function initPerformanceChart(days) {
+            fetch(`/api/performance-comparison?days=${days}`)
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('performance-chart');
+                    if (!ctx) return;
+                    
+                    // If chart already exists, destroy it
+                    if (window.performanceChart) {
+                        window.performanceChart.destroy();
+                    }
+                    
+                    // Create datasets
+                    const datasets = [
+                        {
+                            label: 'CopperQuant Model',
+                            data: data.chart_data['CopperQuant Model'],
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'S&P 500',
+                            data: data.chart_data['S&P 500'],
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'DJIA',
+                            data: data.chart_data['DJIA'],
+                            borderColor: '#2ecc71',
+                            backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'NASDAQ',
+                            data: data.chart_data['NASDAQ'],
+                            borderColor: '#9b59b6',
+                            backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'Copper Spot',
+                            data: data.chart_data['Copper Spot'],
+                            borderColor: '#f39c12',
+                            backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'Metals Index',
+                            data: data.chart_data['Metals Index'],
+                            borderColor: '#7f8c8d',
+                            backgroundColor: 'rgba(127, 140, 141, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 5
+                        }
+                    ];
+                    
+                    // Create chart
+                    window.performanceChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.chart_data.dates,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `Performance Comparison (${data.period_days} Days)`,
+                                    font: {
+                                        size: 16
+                                    }
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false
+                                },
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        maxTicksLimit: 10
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Value (Normalized)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Update tables
+                    updatePerformanceTables(data);
+                })
+                .catch(error => console.error('Error loading performance data:', error));
+        }
+        
+        // Update performance tables
+        function updatePerformanceTables(data) {
+            // Update returns table
+            const returnsTable = document.getElementById('returns-table');
+            if (returnsTable) {
+                const tbody = returnsTable.querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                // Sort by return (descending)
+                const sortedReturns = Object.entries(data.returns).sort((a, b) => b[1] - a[1]);
+                
+                // Get CopperQuant return for comparison
+                const copperQuantReturn = data.returns['CopperQuant Model'];
+                
+                sortedReturns.forEach(([name, value]) => {
+                    const row = document.createElement('tr');
+                    
+                    // Name cell
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = name;
+                    if (name === 'CopperQuant Model') {
+                        nameCell.style.fontWeight = 'bold';
+                    }
+                    row.appendChild(nameCell);
+                    
+                    // Return cell
+                    const returnCell = document.createElement('td');
+                    returnCell.textContent = `${value.toFixed(2)}%`;
+                    returnCell.className = value >= 0 ? 'positive' : 'negative';
+                    row.appendChild(returnCell);
+                    
+                    // Comparison cell
+                    const comparisonCell = document.createElement('td');
+                    if (name === 'CopperQuant Model') {
+                        comparisonCell.textContent = '-';
+                    } else {
+                        const diff = copperQuantReturn - value;
+                        comparisonCell.textContent = diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`;
+                        comparisonCell.className = diff >= 0 ? 'positive' : 'negative';
+                    }
+                    row.appendChild(comparisonCell);
+                    
+                    tbody.appendChild(row);
+                });
+            }
+            
+            // Update risk table
+            const riskTable = document.getElementById('risk-table');
+            if (riskTable) {
+                const tbody = riskTable.querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                // Sort by Sharpe ratio (descending)
+                const sortedSharpe = Object.entries(data.sharpe).sort((a, b) => b[1] - a[1]);
+                
+                sortedSharpe.forEach(([name, sharpe]) => {
+                    const row = document.createElement('tr');
+                    
+                    // Name cell
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = name;
+                    if (name === 'CopperQuant Model') {
+                        nameCell.style.fontWeight = 'bold';
+                    }
+                    row.appendChild(nameCell);
+                    
+                    // Volatility cell
+                    const volatilityCell = document.createElement('td');
+                    volatilityCell.textContent = `${data.volatility[name].toFixed(2)}%`;
+                    row.appendChild(volatilityCell);
+                    
+                    // Sharpe cell
+                    const sharpeCell = document.createElement('td');
+                    sharpeCell.textContent = sharpe.toFixed(2);
+                    sharpeCell.className = sharpe >= 1 ? 'positive' : '';
+                    row.appendChild(sharpeCell);
+                    
+                    tbody.appendChild(row);
+                });
+            }
+        }
+        }
+    </script>
+</body>
+</html>
+        // Manual tab switching function for debugging
+        function switchTab(tabId) {
+            console.log(`Manually switching to tab: ${tabId}`);
+            
+            // Find the tab
+            const tab = document.querySelector(`.tab[data-target="${tabId}"]`);
+            if (tab) {
+                // Remove active class from all tabs
+                const tabs = document.querySelectorAll('.tab');
+                tabs.forEach(t => t.classList.remove('active'));
+                
+                // Add active class to selected tab
+                tab.classList.add('active');
+                
+                // Hide all tab content
+                const tabContents = document.querySelectorAll('.tab-content');
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Show the corresponding tab content
+                const targetElement = document.getElementById(tabId);
+                if (targetElement) {
+                    targetElement.classList.add('active');
+                    console.log(`Activated tab content: ${tabId}`);
+                    return true;
+                } else {
+                    console.error(`Target element not found: ${tabId}`);
+                    return false;
+                }
+            } else {
+                console.error(`Tab not found for target: ${tabId}`);
+                return false;
+            }
+        }
+        
+        // Make switchTab available globally for debugging
+        window.switchTab = switchTab;
+        // Function to check tab state for debugging
+        function checkTabState() {
+            console.log("Checking tab state...");
+            
+            // Check tabs
+            const tabs = document.querySelectorAll('.tab');
+            console.log(`Found ${tabs.length} tabs:`);
+            tabs.forEach(tab => {
+                const isActive = tab.classList.contains('active');
+                const target = tab.getAttribute('data-target');
+                console.log(`- Tab "${tab.textContent}": active=${isActive}, target=${target}`);
+            });
+            
+            // Check tab content
+            const tabContents = document.querySelectorAll('.tab-content');
+            console.log(`Found ${tabContents.length} tab content sections:`);
+            tabContents.forEach(content => {
+                const isActive = content.classList.contains('active');
+                const display = window.getComputedStyle(content).display;
+                console.log(`- Content "${content.id}": active=${isActive}, display=${display}`);
+            });
+            
+            return {
+                tabs: Array.from(tabs).map(tab => ({
+                    text: tab.textContent,
+                    active: tab.classList.contains('active'),
+                    target: tab.getAttribute('data-target')
+                })),
+                contents: Array.from(tabContents).map(content => ({
+                    id: content.id,
+                    active: content.classList.contains('active'),
+                    display: window.getComputedStyle(content).display
+                }))
+            };
+        }
+        
+        // Make checkTabState available globally for debugging
+        window.checkTabState = checkTabState;
+    </script>
+</body>
+</html>
